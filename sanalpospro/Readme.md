@@ -1,1 +1,1 @@
-# GarantiBBVA
+# SanalPOS PRO
