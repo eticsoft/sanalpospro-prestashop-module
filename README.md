@@ -1,4 +1,4 @@
-# PrestaShop SanalPOS PRO v1.7.x ve v8.x Ödeme Modülü
+# PrestaShop SanalPOS PRO v1.7.x - v8.x ve v9.x Ödeme Modülü
 
 PrestaShop, e-ticaret siteleri için popüler bir açık kaynaklı platformdur. SanalPOS PRO ödeme modülü ile müşterilerinize güvenli ödeme seçenekleri sunabilirsiniz. 
 Aşağıda, SanalPOS PRO modül kurulum sürecini adım adım anlatan bir kılavuz bulunmaktadır.
