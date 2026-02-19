@@ -81,11 +81,11 @@
                                                 </span>
                                             </td>
                                             {if $rate !== null}
-                                                {if $installment_count == 1 && $rate['gateway_fee_percent'] == 0}
+                                                {if $installment_count == 1 && $rate['buyer_fee_percent'] == 0}
                                                     {assign var="total_amount" value=$price}
                                                     {assign var="monthly_payment" value=$total_amount}
                                                 {else}
-                                                    {assign var="total_amount" value=$price * (1 + $rate['gateway_fee_percent']/100)}
+                                                    {assign var="total_amount" value=($price * 100) / (100 - $rate['buyer_fee_percent'])}
                                                     {assign var="monthly_payment" value=$total_amount/$installment_count}
                                                 {/if}
                                                 <td class="modern-monthly-payment">

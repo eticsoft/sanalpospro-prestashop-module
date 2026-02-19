@@ -34,8 +34,11 @@
   const store_url = '{$store_url}';
   const iapi_xfvv = '{$iapi_xfvv}';
 
+  window.xfvv = iapi_xfvv;
+  window.target_url = iapi_base_url;
+  window.store_url = store_url;
+
   let generalSettings = {
-    update_version: 8.0 > current_version,
     order_status: {
       default_value: "{$SANALPOSPRO_ORDER_STATUS|default:'2'|escape:'html':'UTF-8'}",
       options: {
@@ -66,10 +69,11 @@
       }
     }
   }
+  window.generalSettings = generalSettings;
 </script>
-<script type="module" src="https://cdn.paythor.com/1/102/10.0.1/index.js"></script>
-<link rel="stylesheet" href="https://cdn.paythor.com/1/102/10.0.1/index.css">
-<div id="paythor-container" 
+<script type="module" src="https://cdn.paythor.com/1/102/10.0.4/index.js"></script>
+<link rel="stylesheet" href="https://cdn.paythor.com/1/102/10.0.4/index.css">
+<div id="root" 
      data-platform="prestashop" 
      data-app-id="102"
      data-program-id="1"
