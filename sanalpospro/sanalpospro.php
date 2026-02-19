@@ -44,10 +44,10 @@ class sanalpospro extends PaymentModule
     {
         $this->name = 'sanalpospro';
         $this->tab = 'payments_gateways';
-        $this->version = '10.0.1';
+        $this->version = '10.0.4';
         $this->author = 'EticSoft R&D Lab';
         $this->need_instance = 1;
-        $this->ps_versions_compliancy = ['min' => '1.6', 'max' => '8.5'];
+        $this->ps_versions_compliancy = ['min' => '1.7', 'max' => '9.0.3'];
 
         /*
          * Set $this->bootstrap to true if your module is compliant with bootstrap (PrestaShop 1.6)
@@ -311,4 +311,4 @@ class sanalpospro extends PaymentModule
     {
         return _PS_MODULE_DIR_ . $this->name . '/views/templates/' . $template;
     }
-} 
+}

@@ -371,20 +371,25 @@ class InternalApi
                 ]);
                 return $this;
             } else {
-                $this->module->validateOrder(
-                    $cart->id,
-                    EticConfig::get('PS_OS_ERROR'),
-                    $cart->getOrderTotal(true, \Cart::BOTH),
-                    $this->module->displayName,
-                    null,
-                    [],
-                    null,
-                    false,
-                    $customer->secure_key
-                );
+                /*                 $this->module->validateOrder(
+                                    $cart->id,
+                                    EticConfig::get('PS_OS_ERROR'),
+                                    $cart->getOrderTotal(true, \Cart::BOTH),
+                                    $this->module->displayName,
+                                    null,
+                                    [],
+                                    null,
+                                    false,
+                                    $customer->secure_key
+                                ); */
+                $redirect_url = $link->getPageLink('order', true, null, 'step=3');
+                $this->setResponse('warning', 'Order confirmation failed', [
+                    'redirect_url' => $redirect_url
+                ]);
+                return $this;
             }
         } catch (\Exception $e) {
-            $redirect_url = $link->getPageLink('index.php?controller=order&step=1', true, null, []);
+            $redirect_url = $link->getPageLink('order', true, null, 'step=3');
             $this->setResponse('warning', 'Order confirmation failed', [
                 'redirect_url' => $redirect_url
             ]);

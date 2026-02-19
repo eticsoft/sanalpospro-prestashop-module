@@ -59,11 +59,11 @@
                                 <td>{$installment_count|escape:'html':'UTF-8'} {l s='Installment' mod='sanalpospro'}</td>
                                 {if $rate !== null}
                                     {* Taksit hesaplama mantığı *}
-                                    {if $installment_count == 1 && $rate['gateway_fee_percent'] == 0}
+                                    {if $installment_count == 1 && $rate['buyer_fee_percent'] == 0}
                                         {assign var="total_amount" value=$price}
                                         {assign var="monthly_payment" value=$total_amount}
                                     {else}
-                                        {assign var="total_amount" value=$price * (1 + $rate['gateway_fee_percent']/100)}
+                                        {assign var="total_amount" value=($price * 100) / (100 - $rate['buyer_fee_percent'])}
                                         {assign var="monthly_payment" value=$total_amount/$installment_count}
                                     {/if}
                                     <td>{$monthly_payment|escape:'html':'UTF-8'|string_format:"%.2f"} {$currencySymbol}</td>

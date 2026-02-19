@@ -35,7 +35,7 @@
     const id_cart = "{$ids.id_cart|escape:'javascript':'UTF-8'}";
 
     // Logo URL'sini tanımlayın
-    const logoUrl = "https://sanalpospro.com/wp-content/uploads/2019/01/sanalpospro3d-logo-3-01.svg"; // Logonuzun URL'si
+    const logoUrl = "https://cdn.paythor.com/1/spp-logo.png";
 
     // Logoyu dinamik olarak ekleme
     $(document).ready(function() {
