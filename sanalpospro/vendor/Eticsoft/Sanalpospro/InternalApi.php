@@ -253,11 +253,17 @@ class InternalApi
             ], true);
             $payment->setReturnUrl($redirect_url);
 
+            $callback_url = $link->getModuleLink($this->module->name, 'paymenthandler', [
+                'action' => 'callback',
+                'nonce' => EticConfig::get('SANALPOSPRO_XFVV')
+            ], true);
+            $payment->setCallbackUrl($callback_url);
+
             $payerAddress = new Address();
             $payerAddress->setLine1($adress->address1);
             $payerAddress->setCity($adress->city);
             $payerAddress->setState($adress->country);
-            $payerAddress->setPostalCode($adress->postcode);
+            $payerAddress->setPostalCode(empty($adress->postcode) ? "07700" : $adress->postcode);
             $payerAddress->setCountry($adress->country);
 
 
@@ -303,6 +309,10 @@ class InternalApi
 
             $result = Payment::createPayment($paymentRequest->toArray());
 
+/*             print_r($result);
+            print_r($paymentRequest->toArray());
+            die; */
+
             $this->response = $result;
             return $this;
         } catch (\Exception $e) {
@@ -324,8 +334,36 @@ class InternalApi
         }
         $customer = new \Customer($cart->id_customer);
         $link = EticContext::get('link');
+        $db = \Db::getInstance();
+        $lockName = 'sanalpospro_confirm_' . (int) $cart->id;
+        $locked = (bool) $db->getValue("SELECT GET_LOCK('" . pSQL($lockName) . "', 10)");
+
+        if (!$locked) {
+            $this->setResponse('warning', 'Order confirmation in progress');
+            return $this;
+        }
 
         try {
+            $existingOrderId = (int) \Order::getIdByCartId((int) $cart->id);
+            if ($existingOrderId > 0) {
+                $existingOrder = new \Order($existingOrderId);
+                $existingOrderState = new \OrderState((int) $existingOrder->current_state);
+
+                if ($existingOrderState->paid) {
+                    $redirect_url = $link->getPageLink('order-confirmation', true, null, [
+                        'id_cart' => $cart->id,
+                        'id_module' => $this->module->id,
+                        'id_order' => $existingOrderId,
+                        'key' => $existingOrder->secure_key
+                    ]);
+
+                    $this->setResponse('success', 'Order already confirmed', [
+                        'redirect_url' => $redirect_url
+                    ]);
+                    return $this;
+                }
+            }
+
             $process_token = $this->params['process_token'];
             $res = Payment::validatePayment($process_token);
 
@@ -360,6 +398,20 @@ class InternalApi
                 $order->total_paid = $transaction_amount;
                 $order->update();
 
+                // Persist SanalPOS PRO process token on the OrderPayment record(s)
+                // so the admin order detail page can later retrieve the transaction.
+                try {
+                    $orderPayments = \OrderPayment::getByOrderReference($order->reference);
+                    if (!empty($orderPayments)) {
+                        foreach ($orderPayments as $orderPayment) {
+                            $orderPayment->transaction_id = $process_token;
+                            $orderPayment->update();
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // ignore: payment record persistence is best-effort
+                }
+
                 $redirect_url = $link->getPageLink('order-confirmation', true, null, [
                     'id_cart' => $cart->id,
                     'id_module' => $this->module->id,
@@ -393,6 +445,8 @@ class InternalApi
             $this->setResponse('warning', 'Order confirmation failed', [
                 'redirect_url' => $redirect_url
             ]);
+        } finally {
+            $db->getValue("SELECT RELEASE_LOCK('" . pSQL($lockName) . "')");
         }
 
         $this->setResponse('success', 'Order confirmation');
@@ -421,9 +475,39 @@ class InternalApi
     private function actionGetMerchantInfo(): self
     {
         try {
-            $apiClient = ApiClient::getInstanse();
-            $this->response = $apiClient->post('/merchant/info', []);
+            $shopName = EticConfig::get('PS_SHOP_NAME');
+            $shopEmail = EticConfig::get('PS_SHOP_EMAIL');
+            $shopPhone = EticConfig::get('PS_SHOP_PHONE');
+            $shopAddr1 = EticConfig::get('PS_SHOP_ADDR1');
+            $shopAddr2 = EticConfig::get('PS_SHOP_ADDR2');
+            $countryId = EticConfig::get('PS_SHOP_COUNTRY_ID');
+            $country = new \Country($countryId);
+            $langId = EticConfig::get('PS_LANG_DEFAULT');
+            $lang = new \Language($langId);
+            $countryName = $country->name[$langId] ?? 'TR';
+            $currencyId = EticConfig::get('PS_CURRENCY_DEFAULT');
+            $currency = new \Currency($currencyId);
+            $shopUrl = \Tools::getShopDomainSsl(true) . __PS_BASE_URI__;
 
+            $data = [
+                'store' => [
+                    'name' => $shopName,
+                    'url' => $shopUrl,
+                    'admin_email' => $shopEmail,
+                    'phone' => $shopPhone,
+                    'address' => [
+                        'address' => trim($shopAddr1 . ' ' . $shopAddr2),
+                        'country' => $countryName
+                    ],
+                    'language' => $lang->iso_code
+                ],
+                'payment' => [
+                    'currency' => $currency->iso_code,
+                    'currency_symbol' => $currency->sign
+                ]
+            ];
+
+            $this->setResponse('success', 'Merchant info retrieved', $data);
             return $this;
         } catch (\Exception $e) {
             $this->setResponse('error', $e->getMessage());

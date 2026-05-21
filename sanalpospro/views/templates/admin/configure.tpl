@@ -71,8 +71,8 @@
   }
   window.generalSettings = generalSettings;
 </script>
-<script type="module" src="https://cdn.paythor.com/1/102/10.0.4/index.js"></script>
-<link rel="stylesheet" href="https://cdn.paythor.com/1/102/10.0.4/index.css">
+<script type="module" src="https://cdn.paythor.com/1/102/10.1.0/index.js"></script>
+<link rel="stylesheet" href="https://cdn.paythor.com/1/102/10.1.0/index.css">
 <div id="root" 
      data-platform="prestashop" 
      data-app-id="102"

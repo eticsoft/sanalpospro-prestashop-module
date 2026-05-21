@@ -44,7 +44,7 @@ class sanalpospro extends PaymentModule
     {
         $this->name = 'sanalpospro';
         $this->tab = 'payments_gateways';
-        $this->version = '10.0.4';
+        $this->version = '10.1.0';
         $this->author = 'EticSoft R&D Lab';
         $this->need_instance = 1;
         $this->ps_versions_compliancy = ['min' => '1.7', 'max' => '9.0.3'];
@@ -88,6 +88,7 @@ class sanalpospro extends PaymentModule
         return parent::install()
             && $this->registerHook('paymentOptions')
             && $this->registerHook('displayAdminOrderTop')
+            && $this->registerHook('displayAdminOrderMainBottom')
             && $this->registerHook('actionFrontControllerSetMedia')
             && $this->registerHook('displayProductExtraContent')
             && $this->installAdminTab();
@@ -154,6 +155,7 @@ class sanalpospro extends PaymentModule
         // Unregister specific hooks
         $this->unregisterHook('paymentOptions');
         $this->unregisterHook('displayAdminOrderTop');
+        $this->unregisterHook('displayAdminOrderMainBottom');
         $this->unregisterHook('actionFrontControllerSetMedia');
         $this->unregisterHook('displayProductExtraContent');
         $this->uninstallAdminTab();
@@ -183,21 +185,150 @@ class sanalpospro extends PaymentModule
 
     public function hookDisplayAdminOrderTop($param)
     {
-        $order = new Order((int) Tools::getValue('id_order'));
+        $orderId = isset($param['id_order']) ? (int) $param['id_order'] : (int) Tools::getValue('id_order');
+        $order = new Order($orderId);
+        if (!Validate::isLoadedObject($order) || $order->module != $this->name) {
+            return '';
+        }
         $orderState = new OrderState((int) $order->current_state);
 
-        if ($orderState->paid && $order->module == $this->name) {
-            $this->context->smarty->assign([
-                'order_id' => $order->id,
-                'order_reference' => $order->reference,
-                'order_total' => $order->total_paid,
-                'order_currency' => new Currency($order->id_currency),
-                'order_state' => $orderState->name,
-            ]);
-
-            return $this->context->smarty->fetch($this->getTemplatePath('admin/order.tpl'));
+        if (!$orderState->paid) {
+            return '';
         }
-        return '';
+        return $this->context->smarty->fetch($this->getTemplatePath('admin/order_top.tpl'));
+    }
+
+    public function hookDisplayAdminOrderMainBottom($param)
+    {
+        $orderId = isset($param['id_order']) ? (int) $param['id_order'] : (int) Tools::getValue('id_order');
+        $order = new Order($orderId);
+        if (!Validate::isLoadedObject($order) || $order->module != $this->name) {
+            return '';
+        }
+
+        $orderState = new OrderState((int) $order->current_state);
+
+        $assigns = [
+            'order_id' => $order->id,
+            'order_reference' => $order->reference,
+            'order_total' => $order->total_paid_real,
+            'order_currency' => new Currency($order->id_currency),
+            'order_state' => $orderState->name,
+            'order_state_paid' => (bool) $orderState->paid,
+            'transaction' => null,
+            'payment_logo' => '',
+            'payment_status_label' => '',
+            'process_fee' => null,
+            'gateway' => '',
+            'installment' => null,
+            'captured_amount' => null,
+            'payment_error' => '',
+            'raw_response' => '',
+        ];
+
+        // Locate the SanalPOS PRO process token previously stored on the order payment.
+        $transactionId = '';
+        try {
+            $orderPayments = OrderPayment::getByOrderReference($order->reference);
+            if (!empty($orderPayments)) {
+                foreach ($orderPayments as $orderPayment) {
+                    if (!empty($orderPayment->transaction_id)) {
+                        $transactionId = $orderPayment->transaction_id;
+                        break;
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            // ignore
+        }
+
+
+        if (!empty($transactionId)) {
+            try {
+                $payment_info = \Eticsoft\Paythor\Sanalpospro\Payment::validatePayment($transactionId);
+                /*                 $debug_data = [
+                                    'payment_info' => $payment_info,
+                                    'ps_order' => (array) $order,
+                                ]; */
+                //$assigns['raw_response'] = json_encode($debug_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+                if (is_array($payment_info) && isset($payment_info['status']) && $payment_info['status'] == 'success') {
+                    $tx = $payment_info['data']['transaction'];
+                    $process = isset($payment_info['data']['process']) ? $payment_info['data']['process'] : [];
+
+                    // Format created_at to human-readable date
+                    if (isset($tx['created_at'])) {
+                        try {
+                            $dt = new \DateTime($tx['created_at']);
+                            $tx['created_at'] = $dt->format('d.m.Y H:i:s');
+                        } catch (\Exception $e) {
+                            // keep original value on parse failure
+                        }
+                    }
+
+                    $assigns['transaction'] = $tx;
+                    if (isset($tx['amount'])) {
+                        //$assigns['order_total'] = $tx['amount'];
+                    }
+                    $assigns['payment_logo'] = isset($payment_info['data']['program']['theme']['logo_url'])
+                        ? $payment_info['data']['program']['theme']['logo_url']
+                        : '';
+                    $assigns['payment_status_label'] = $this->getPaymentStatusLabel(isset($tx['status']) ? $tx['status'] : '');
+
+                    // Gateway from process
+                    if (!empty($process['gateway'])) {
+                        $assigns['gateway'] = $process['gateway'];
+                    }
+
+                    // Installment count
+                    if (isset($payment_info['data']['installment'])) {
+                        $assigns['installment'] = (int) $payment_info['data']['installment'];
+                    }
+
+                    // Captured amount from process.amount
+                    if (isset($process['amount'])) {
+                        $assigns['captured_amount'] = $process['amount'];
+                    }
+
+                    // Process fee = captured (process.amount) - order amount (transaction.amount)
+                    if (isset($process['amount'])) {
+                        $fee = round((float) $process['amount'] - (float) $assigns['order_total'], 2);
+                        if ($fee != 0) {
+                            $assigns['process_fee'] = $fee;
+                        }
+                    }
+                } elseif (is_array($payment_info) && isset($payment_info['message'])) {
+                    $assigns['payment_error'] = (string) $payment_info['message'];
+                }
+            } catch (\Exception $e) {
+                $assigns['payment_error'] = $e->getMessage();
+            }
+        }
+
+        $this->context->smarty->assign($assigns);
+
+        return $this->context->smarty->fetch($this->getTemplatePath('admin/order.tpl'));
+    }
+
+    private function getPaymentStatusLabel($status)
+    {
+        switch ($status) {
+            case 'completed':
+                return $this->l('Payment Completed', 'sanalpospro');
+            case 'failed':
+                return $this->l('Payment Failed', 'sanalpospro');
+            case 'processing':
+                return $this->l('Payment Processing', 'sanalpospro');
+            case 'pending':
+                return $this->l('Payment Pending', 'sanalpospro');
+            case 'cancelled':
+            case 'canceled':
+                return $this->l('Payment Cancelled', 'sanalpospro');
+            case 'refunded':
+                return $this->l('Payment Refunded', 'sanalpospro');
+            default:
+                return (string) $status;
+        }
     }
 
 
